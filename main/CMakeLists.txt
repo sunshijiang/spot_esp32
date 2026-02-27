@@ -1,0 +1,23 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "ui/ui.c"
+        "display/display.c"
+        "encoder/encoder.c"
+        "weld/weld.c"
+        "charge/charge.c"
+        "adc_monitor/adc_monitor.c"
+        "buzzer/buzzer.c"
+        "drivers/st7735s.c"
+        "drivers/ina226.c"
+    INCLUDE_DIRS
+        "."
+        "ui"
+        "display"
+        "encoder"
+        "weld"
+        "charge"
+        "adc_monitor"
+        "buzzer"
+        "drivers"
+)
