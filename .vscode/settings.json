@@ -7,5 +7,6 @@
   "idf.currentSetup": "D:/espressif_v5_5_2/Espressif/frameworks/esp-idf-v5.5.2/",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
-  }
+  },
+  "idf.flashType": "JTAG"
 }
