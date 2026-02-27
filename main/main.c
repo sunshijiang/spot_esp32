@@ -1,7 +1,5 @@
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
-
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "driver/spi_master.h"
@@ -28,6 +26,7 @@
 
 #define COLOR_BLACK 0x0000
 #define COLOR_WHITE 0xFFFF
+#define LCD_TX_CHUNK_BYTES 32
 
 static const char *TAG = "spot_ui";
 
@@ -130,14 +129,18 @@ static void st7735_set_addr_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16
 
 static void st7735_fill_screen(uint16_t color)
 {
-    static uint16_t line[LCD_WIDTH];
-    for (int i = 0; i < LCD_WIDTH; i++) {
-        line[i] = (uint16_t)((color << 8) | (color >> 8));
+    uint16_t chunk[LCD_TX_CHUNK_BYTES / 2];
+    uint16_t swapped_color = (uint16_t)((color << 8) | (color >> 8));
+    for (int i = 0; i < (int)(LCD_TX_CHUNK_BYTES / 2); i++) {
+        chunk[i] = swapped_color;
     }
 
     st7735_set_addr_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
-    for (int y = 0; y < LCD_HEIGHT; y++) {
-        st7735_send_data((const uint8_t *)line, sizeof(line));
+    int total_bytes = LCD_WIDTH * LCD_HEIGHT * 2;
+    while (total_bytes > 0) {
+        int tx_len = total_bytes > LCD_TX_CHUNK_BYTES ? LCD_TX_CHUNK_BYTES : total_bytes;
+        st7735_send_data((const uint8_t *)chunk, tx_len);
+        total_bytes -= tx_len;
     }
 }
 
@@ -148,20 +151,6 @@ static void st7735_draw_char(uint16_t x, uint16_t y, char c, uint16_t color)
     }
 
     uint8_t glyph_index = (uint8_t)(c - 32);
-    uint16_t pixel[6 * 8];
-
-    for (int row = 0; row < 8; row++) {
-        for (int col = 0; col < 6; col++) {
-            uint16_t out = COLOR_BLACK;
-            if (col < 5 && row < 7) {
-                if ((font5x7[glyph_index][col] >> row) & 0x01) {
-                    out = color;
-                }
-            }
-            pixel[row * 6 + col] = (uint16_t)((out << 8) | (out >> 8));
-        }
-    }
-
     uint16_t x1 = x + 5;
     uint16_t y1 = y + 7;
     if (x1 >= LCD_WIDTH) {
@@ -172,7 +161,24 @@ static void st7735_draw_char(uint16_t x, uint16_t y, char c, uint16_t color)
     }
 
     st7735_set_addr_window(x, y, x1, y1);
-    st7735_send_data((const uint8_t *)pixel, (x1 - x + 1) * (y1 - y + 1) * 2);
+    uint16_t row_pixel[6];
+    uint16_t width = x1 - x + 1;
+    uint16_t height = y1 - y + 1;
+    uint16_t fg = (uint16_t)((color << 8) | (color >> 8));
+    uint16_t bg = (uint16_t)((COLOR_BLACK << 8) | (COLOR_BLACK >> 8));
+
+    for (uint16_t row = 0; row < height; row++) {
+        for (uint16_t col = 0; col < width; col++) {
+            uint16_t out = bg;
+            if (col < 5 && row < 7) {
+                if ((font5x7[glyph_index][col] >> row) & 0x01) {
+                    out = fg;
+                }
+            }
+            row_pixel[col] = out;
+        }
+        st7735_send_data((const uint8_t *)row_pixel, width * 2);
+    }
 }
 
 static void st7735_draw_string(uint16_t x, uint16_t y, const char *str, uint16_t color)
@@ -234,7 +240,7 @@ static void display_init(void)
         .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = LCD_WIDTH * 2,
+        .max_transfer_sz = LCD_TX_CHUNK_BYTES,
     };
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_DISABLED));
 
