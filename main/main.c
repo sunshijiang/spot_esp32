@@ -482,110 +482,84 @@ static void st7735_draw_line(int x0, int y0, int x1, int y1, uint16_t color)
     }
 }
 
-static void draw_cn_label(uint16_t x, uint16_t y, const char *tag, uint16_t color)
-{
-    if (tag[0] == 'P' && tag[1] == '1') {
-        st7735_draw_line(x + 0, y + 3, x + 10, y + 3, color);
-        st7735_draw_line(x + 2, y + 0, x + 2, y + 13, color);
-        st7735_draw_line(x + 6, y + 0, x + 6, y + 13, color);
-        st7735_draw_line(x + 8, y + 5, x + 12, y + 5, color);
-        st7735_draw_line(x + 8, y + 9, x + 12, y + 9, color);
-        st7735_draw_line(x + 16, y + 2, x + 16, y + 13, color);
-        st7735_draw_line(x + 13, y + 6, x + 19, y + 6, color);
-        st7735_draw_line(x + 13, y + 10, x + 19, y + 10, color);
-        st7735_draw_string(x + 22, y + 4, "1", color);
-    } else if (tag[0] == 'P' && tag[1] == '2') {
-        draw_cn_label(x, y, "P1", color);
-        st7735_fill_rect(x + 22, y + 3, 5, 2, color);
-        st7735_fill_rect(x + 25, y + 6, 2, 2, color);
-        st7735_fill_rect(x + 22, y + 9, 5, 2, color);
-        st7735_fill_rect(x + 22, y + 11, 5, 2, color);
-    } else if (tag[0] == 'J') {
-        st7735_draw_line(x + 0, y + 2, x + 12, y + 2, color);
-        st7735_draw_line(x + 6, y + 2, x + 6, y + 12, color);
-        st7735_draw_line(x + 14, y + 2, x + 14, y + 12, color);
-        st7735_draw_line(x + 18, y + 2, x + 18, y + 12, color);
-        st7735_draw_line(x + 22, y + 2, x + 22, y + 12, color);
-        st7735_draw_line(x + 12, y + 12, x + 24, y + 12, color);
-    } else if (tag[0] == 'A') {
-        st7735_draw_line(x + 0, y + 2, x + 12, y + 2, color);
-        st7735_draw_line(x + 6, y + 2, x + 6, y + 12, color);
-        st7735_draw_line(x + 14, y + 2, x + 24, y + 2, color);
-        st7735_draw_line(x + 19, y + 2, x + 19, y + 12, color);
-        st7735_draw_line(x + 14, y + 12, x + 24, y + 12, color);
-    } else if (tag[0] == 'S') {
-        st7735_draw_line(x + 0, y + 2, x + 12, y + 2, color);
-        st7735_draw_line(x + 0, y + 6, x + 12, y + 6, color);
-        st7735_draw_line(x + 0, y + 10, x + 12, y + 10, color);
-        st7735_draw_line(x + 14, y + 2, x + 24, y + 2, color);
-        st7735_draw_line(x + 14, y + 6, x + 24, y + 6, color);
-        st7735_draw_line(x + 14, y + 10, x + 24, y + 10, color);
-    } else if (tag[0] == 'C') {
-        st7735_draw_line(x + 0, y + 2, x + 12, y + 2, color);
-        st7735_draw_line(x + 0, y + 6, x + 12, y + 6, color);
-        st7735_draw_line(x + 0, y + 10, x + 12, y + 10, color);
-        st7735_draw_line(x + 14, y + 2, x + 14, y + 12, color);
-        st7735_draw_line(x + 18, y + 2, x + 18, y + 12, color);
-        st7735_draw_line(x + 22, y + 2, x + 22, y + 12, color);
-    }
-}
-
-static void draw_value_block(uint16_t x, uint16_t y, uint16_t w, int tenths, const char *unit)
+static void draw_tile_numeric(uint16_t x, uint16_t y, uint16_t w,
+                              uint16_t bg, const char *label,
+                              int value_tenths, const char *unit,
+                              bool selected, bool editing)
 {
     char v[12];
-    format_1decimal(v, sizeof(v), tenths);
-    st7735_fill_rect(x, y, w, 24, COLOR_DARKGRAY);
-    st7735_draw_rect(x, y, w, 24, COLOR_NAVY);
-    st7735_draw_string(x + 8, y + 7, v, COLOR_WHITE);
+    draw_box(x, y, w, 40, bg, selected, editing);
+    st7735_draw_string(x + 4, y + 4, label, COLOR_BLACK);
 
-    st7735_fill_rect(x, y + 24, w, 12, COLOR_YELLOW);
-    st7735_draw_rect(x, y + 24, w, 12, COLOR_NAVY);
-    st7735_draw_string(x + (w > 24 ? 10 : 4), y + 27, unit, COLOR_BLACK);
+    format_1decimal(v, sizeof(v), value_tenths);
+    st7735_fill_rect(x + 1, y + 14, w - 2, 16, COLOR_DARKGRAY);
+    st7735_draw_string(x + 6, y + 18, v, COLOR_WHITE);
+
+    st7735_fill_rect(x + 1, y + 30, w - 2, 9, COLOR_YELLOW);
+    st7735_draw_string(x + 8, y + 31, unit, COLOR_BLACK);
 }
 
 static void draw_main_screen(const ui_state_t *s)
 {
-    char buf[20];
+    char buf[16];
+    const uint16_t left = 2;
+    const uint16_t gap = 1;
+    const uint16_t cell_w = 30;
+    const uint16_t row_h = 40;
+    const uint16_t row1_y = 2;
+    const uint16_t row2_y = 44;
+
+    uint16_t col0 = left;
+    uint16_t col2 = left + (cell_w + gap) * 2;
+    uint16_t col4 = left + (cell_w + gap) * 4;
+    uint16_t w2 = cell_w * 2 + gap;
 
     st7735_fill_screen(COLOR_BLACK);
 
-    draw_box(2, 2, 52, 40, COLOR_GREEN, s->main_selected == MAIN_PULSE1, s->edit_mode);
-    draw_cn_label(8, 18, "P1", COLOR_BLACK);
-    draw_value_block(56, 2, 48, s->pulse1_tenths, "ms");
+    draw_tile_numeric(col0, row1_y, w2, COLOR_GREEN, "PULSE1", s->pulse1_tenths, "ms",
+                      s->main_selected == MAIN_PULSE1, s->edit_mode);
+    draw_tile_numeric(col2, row1_y, w2, 0xC13F, "PULSE2", s->pulse2_tenths, "ms",
+                      s->main_selected == MAIN_PULSE2, s->edit_mode);
 
-    draw_box(106, 2, 52, 40, 0xC13F, s->main_selected == MAIN_PULSE2, s->edit_mode);
-    draw_cn_label(112, 18, "P2", COLOR_BLACK);
-    draw_value_block(56, 44, 48, s->pulse2_tenths, "ms");
+    draw_box(col4, row1_y, cell_w, row_h, COLOR_ORANGE,
+             s->main_selected == MAIN_SETTINGS_ICON, s->edit_mode);
+    st7735_draw_string(col4 + 4, row1_y + 10, "SET", COLOR_BLACK);
 
-    draw_box(2, 44, 52, 40, COLOR_BLUE, s->main_selected == MAIN_INTERVAL, s->edit_mode);
-    draw_cn_label(8, 60, "JG", COLOR_BLACK);
+    draw_tile_numeric(col0, row2_y, w2, COLOR_BLUE, "INTERVAL", s->interval_tenths, "ms",
+                      s->main_selected == MAIN_INTERVAL, s->edit_mode);
+    draw_tile_numeric(col2, row2_y, w2, 0x7B5F, "AUTO", s->auto_weld_tenths, "s",
+                      s->main_selected == MAIN_AUTO_WELD, s->edit_mode);
 
-    draw_box(106, 44, 52, 40, 0x7B5F, s->main_selected == MAIN_AUTO_WELD, s->edit_mode);
-    draw_cn_label(112, 60, "AUTO", COLOR_BLACK);
-    draw_value_block(106, 86, 52, s->auto_weld_tenths, "s");
-
-    draw_box(56, 86, 48, 40, COLOR_DARKGRAY, s->main_selected == MAIN_CHARGE_V, s->edit_mode);
+    draw_box(col4, row2_y, cell_w, row_h, COLOR_DARKGRAY,
+             s->main_selected == MAIN_CHARGE_V, s->edit_mode);
     format_2decimal(buf, sizeof(buf), s->charge_cent);
-    st7735_draw_string(62, 94, buf, COLOR_WHITE);
-    st7735_draw_string(86, 94, "V", COLOR_WHITE);
-    st7735_fill_rect(56, 110, 48, 16, COLOR_YELLOW);
-    draw_cn_label(58, 112, "CHG", COLOR_BLACK);
+    st7735_draw_string(col4 + 2, row2_y + 10, buf, COLOR_WHITE);
+    st7735_draw_string(col4 + 20, row2_y + 20, "V", COLOR_WHITE);
 
-    draw_box(106, 86, 52, 40, COLOR_ORANGE, s->main_selected == MAIN_SETTINGS_ICON, s->edit_mode);
-    draw_cn_label(112, 100, "SET", COLOR_BLACK);
-
-    st7735_draw_rect(2, 86, 52, 40, COLOR_DARKGRAY);
-    st7735_draw_string(4, 90, "P1", COLOR_GREEN);
+    st7735_draw_rect(2, 86, 156, 40, COLOR_DARKGRAY);
     format_1decimal(buf, sizeof(buf), s->pulse1_tenths);
-    st7735_draw_string(16, 90, buf, COLOR_WHITE);
-    st7735_draw_string(36, 90, "P2", COLOR_BLUE);
-    format_1decimal(buf, sizeof(buf), s->pulse2_tenths);
-    st7735_draw_string(48, 90, buf, COLOR_WHITE);
+    st7735_draw_string(4, 90, "P1", COLOR_GREEN);
+    st7735_draw_string(18, 90, buf, COLOR_WHITE);
 
-    st7735_draw_string(4, 102, "INT", COLOR_CYAN);
+    format_1decimal(buf, sizeof(buf), s->pulse2_tenths);
+    st7735_draw_string(56, 90, "P2", COLOR_CYAN);
+    st7735_draw_string(70, 90, buf, COLOR_WHITE);
+
     format_1decimal(buf, sizeof(buf), s->interval_tenths);
-    st7735_draw_string(24, 102, buf, COLOR_WHITE);
-    st7735_draw_string(4, 114, s->edit_mode ? "EDIT" : "NAV", COLOR_YELLOW);
+    st7735_draw_string(108, 90, "INT", COLOR_BLUE);
+    st7735_draw_string(130, 90, buf, COLOR_WHITE);
+
+    format_1decimal(buf, sizeof(buf), s->auto_weld_tenths);
+    st7735_draw_string(4, 104, "AUTO", COLOR_CYAN);
+    st7735_draw_string(30, 104, buf, COLOR_WHITE);
+    st7735_draw_string(50, 104, "s", COLOR_YELLOW);
+
+    format_2decimal(buf, sizeof(buf), s->charge_cent);
+    st7735_draw_string(70, 104, "CHG", COLOR_YELLOW);
+    st7735_draw_string(90, 104, buf, COLOR_WHITE);
+    st7735_draw_string(118, 104, "V", COLOR_YELLOW);
+
+    st7735_draw_string(4, 116, s->edit_mode ? "MODE:EDIT" : "MODE:NAV", COLOR_YELLOW);
 }
 
 static void draw_settings_screen(const ui_state_t *s)
