@@ -48,35 +48,66 @@ static volatile uint8_t encoder_state = 0;
 static volatile int8_t encoder_delta = 0;
 
 typedef enum {
-    FIELD_PULSE1 = 0,
-    FIELD_PULSE2,
-    FIELD_INTERVAL,
-    FIELD_WELD_MODE,
-    FIELD_CHARGE_V,
-    FIELD_SETTINGS,
-    FIELD_COUNT,
-} field_id_t;
+    SCREEN_MAIN = 0,
+    SCREEN_SETTINGS,
+} screen_id_t;
+
+typedef enum {
+    MAIN_PULSE1 = 0,
+    MAIN_PULSE2,
+    MAIN_INTERVAL,
+    MAIN_AUTO_WELD,
+    MAIN_SETTINGS_ICON,
+    MAIN_CHARGE_V,
+    MAIN_COUNT,
+} main_field_t;
+
+typedef enum {
+    SET_CAP_CHARGE = 0,
+    SET_MAX_CHARGE_CURRENT,
+    SET_MAX_CHARGE_POWER,
+    SET_BUZZER,
+    SET_SAVE_MODE,
+    SET_EXIT,
+    SET_COUNT,
+} setting_item_t;
 
 typedef struct {
+    screen_id_t screen;
+    bool edit_mode;
+    int main_selected;
+    int settings_selected;
+
     int pulse1_tenths;
     int pulse2_tenths;
     int interval_tenths;
-    int weld_auto;
+    int auto_weld_tenths;
     int charge_cent;
-    int setting_level;
-    int selected;
-    bool edit_mode;
+
+    int cap_charge_on;
+    int max_charge_current_tenths;
+    int max_charge_power;
+    int buzzer_on;
+    int save_mode;
 } ui_state_t;
 
 static ui_state_t g_ui = {
-    .pulse1_tenths = 50,
-    .pulse2_tenths = 0,
-    .interval_tenths = 10,
-    .weld_auto = 1,
-    .charge_cent = 540,
-    .setting_level = 3,
-    .selected = FIELD_PULSE1,
+    .screen = SCREEN_MAIN,
     .edit_mode = false,
+    .main_selected = MAIN_PULSE1,
+    .settings_selected = SET_CAP_CHARGE,
+
+    .pulse1_tenths = 25,
+    .pulse2_tenths = 25,
+    .interval_tenths = 10,
+    .auto_weld_tenths = 8,
+    .charge_cent = 532,
+
+    .cap_charge_on = 1,
+    .max_charge_current_tenths = 100,
+    .max_charge_power = 60,
+    .buzzer_on = 1,
+    .save_mode = 0,
 };
 
 static const uint8_t font5x7[96][5] = {
@@ -415,52 +446,129 @@ static void format_2decimal(char *out, size_t len, int cent)
     snprintf(out, len, "%d.%02d", whole, frac);
 }
 
-static void render_ui(const ui_state_t *s)
+static void draw_main_screen(const ui_state_t *s)
 {
     char buf[20];
 
     st7735_fill_screen(COLOR_BLACK);
 
-    draw_box(2, 2, 50, 28, COLOR_GREEN, s->selected == FIELD_PULSE1, s->edit_mode);
-    st7735_draw_string(6, 6, "PULSE1", COLOR_BLACK);
+    draw_box(2, 2, 36, 40, COLOR_GREEN, s->main_selected == MAIN_PULSE1, s->edit_mode);
+    st7735_draw_string(6, 18, "P1", COLOR_BLACK);
+
+    draw_box(40, 2, 36, 40, COLOR_BLUE, s->main_selected == MAIN_PULSE2, s->edit_mode);
+    st7735_draw_string(44, 18, "P2", COLOR_WHITE);
+
+    draw_box(78, 2, 36, 40, COLOR_CYAN, s->main_selected == MAIN_INTERVAL, s->edit_mode);
+    st7735_draw_string(82, 18, "INT", COLOR_BLACK);
+
+    draw_box(116, 2, 42, 40, COLOR_ORANGE, s->main_selected == MAIN_SETTINGS_ICON, s->edit_mode);
+    st7735_draw_string(121, 10, "SET", COLOR_BLACK);
+    st7735_draw_string(121, 22, "ICON", COLOR_BLACK);
+
+    draw_box(2, 44, 36, 40, COLOR_CYAN, s->main_selected == MAIN_AUTO_WELD, s->edit_mode);
+    st7735_draw_string(6, 56, "AUTO", COLOR_BLACK);
+    st7735_draw_string(6, 68, "WELD", COLOR_BLACK);
+
+    draw_box(40, 44, 36, 40, COLOR_DARKGRAY, s->main_selected == MAIN_CHARGE_V, s->edit_mode);
+    st7735_draw_string(44, 56, "CHG", COLOR_WHITE);
+    st7735_draw_string(44, 68, "V", COLOR_WHITE);
+
+    draw_box(78, 44, 80, 40, COLOR_NAVY, false, false);
+    st7735_draw_string(82, 50, "TOP AREA", COLOR_WHITE);
+    st7735_draw_string(82, 62, "2/3 SCREEN", COLOR_WHITE);
+
+    st7735_draw_rect(2, 86, 156, 40, COLOR_DARKGRAY);
     format_1decimal(buf, sizeof(buf), s->pulse1_tenths);
-    st7735_draw_string(6, 16, buf, COLOR_BLACK);
+    st7735_draw_string(6, 90, "P1:", COLOR_GREEN);
+    st7735_draw_string(30, 90, buf, COLOR_WHITE);
+    st7735_draw_string(52, 90, "ms", COLOR_YELLOW);
 
-    draw_box(55, 2, 50, 28, COLOR_BLUE, s->selected == FIELD_PULSE2, s->edit_mode);
-    st7735_draw_string(60, 6, "PULSE2", COLOR_WHITE);
     format_1decimal(buf, sizeof(buf), s->pulse2_tenths);
-    st7735_draw_string(60, 16, buf, COLOR_WHITE);
+    st7735_draw_string(76, 90, "P2:", COLOR_BLUE);
+    st7735_draw_string(100, 90, buf, COLOR_WHITE);
+    st7735_draw_string(122, 90, "ms", COLOR_YELLOW);
 
-    draw_box(108, 2, 50, 28, COLOR_ORANGE, s->selected == FIELD_SETTINGS, s->edit_mode);
-    st7735_draw_string(113, 6, "SET", COLOR_BLACK);
-    snprintf(buf, sizeof(buf), "L%d", s->setting_level);
-    st7735_draw_string(113, 16, buf, COLOR_BLACK);
-
-    draw_box(2, 33, 50, 28, COLOR_NAVY, s->selected == FIELD_INTERVAL, s->edit_mode);
-    st7735_draw_string(6, 37, "INTERV", COLOR_WHITE);
     format_1decimal(buf, sizeof(buf), s->interval_tenths);
-    st7735_draw_string(6, 47, buf, COLOR_WHITE);
+    st7735_draw_string(6, 102, "INT:", COLOR_CYAN);
+    st7735_draw_string(30, 102, buf, COLOR_WHITE);
+    st7735_draw_string(52, 102, "ms", COLOR_YELLOW);
 
-    draw_box(55, 33, 50, 28, COLOR_CYAN, s->selected == FIELD_WELD_MODE, s->edit_mode);
-    st7735_draw_string(60, 37, "WELD", COLOR_BLACK);
-    st7735_draw_string(60, 47, s->weld_auto ? "AUTO" : "MAN", COLOR_BLACK);
+    format_1decimal(buf, sizeof(buf), s->auto_weld_tenths);
+    st7735_draw_string(76, 102, "AUTO:", COLOR_CYAN);
+    st7735_draw_string(106, 102, buf, COLOR_WHITE);
+    st7735_draw_string(128, 102, "s", COLOR_YELLOW);
 
-    draw_box(108, 33, 50, 28, COLOR_DARKGRAY, s->selected == FIELD_CHARGE_V, s->edit_mode);
-    st7735_draw_string(112, 37, "CHG V", COLOR_WHITE);
     format_2decimal(buf, sizeof(buf), s->charge_cent);
-    st7735_draw_string(112, 47, buf, COLOR_WHITE);
+    st7735_draw_string(6, 114, "CHG V:", COLOR_YELLOW);
+    st7735_draw_string(42, 114, buf, COLOR_WHITE);
+    st7735_draw_string(70, 114, "V", COLOR_YELLOW);
 
-    st7735_draw_rect(2, 64, 156, 28, COLOR_DARKGRAY);
-    st7735_draw_string(6, 68, "SENSOR FIXED", COLOR_CYAN);
-    st7735_draw_string(6, 78, "IN:19.3V T:31C", COLOR_WHITE);
-    st7735_draw_string(6, 86, "TRIG:MAN CNT:0", COLOR_WHITE);
+    st7735_draw_string(88, 114, s->edit_mode ? "EDIT" : "NAV", COLOR_YELLOW);
+}
 
-    st7735_draw_rect(2, 95, 156, 30, COLOR_DARKGRAY);
-    st7735_draw_string(6, 100, "OUTA 2.500V", COLOR_GREEN);
-    st7735_draw_string(84, 100, "OUTB 2.491V", COLOR_GREEN);
-    st7735_draw_string(6, 110, s->edit_mode ? "MODE:EDIT" : "MODE:NAV", COLOR_YELLOW);
-    snprintf(buf, sizeof(buf), "SEL:%d", s->selected + 1);
-    st7735_draw_string(84, 110, buf, COLOR_YELLOW);
+static void draw_settings_screen(const ui_state_t *s)
+{
+    char val[16];
+    const char *names[SET_COUNT] = {
+        "CAP CHARGE",
+        "MAX I",
+        "MAX P",
+        "BUZZER",
+        "SAVE",
+        "EXIT",
+    };
+
+    st7735_fill_screen(COLOR_BLACK);
+    st7735_fill_rect(0, 0, 160, 12, COLOR_BLUE);
+    st7735_draw_string(4, 2, "SETTINGS", COLOR_WHITE);
+
+    for (int i = 0; i < SET_COUNT; i++) {
+        int y = 14 + i * 18;
+        bool sel = (i == s->settings_selected);
+        if (sel) {
+            st7735_fill_rect(0, y - 1, 160, 16, COLOR_NAVY);
+        }
+
+        st7735_draw_string(4, y + 3, names[i], COLOR_WHITE);
+
+        val[0] = '\0';
+        switch (i) {
+            case SET_CAP_CHARGE:
+                snprintf(val, sizeof(val), "%s", s->cap_charge_on ? "ON" : "OFF");
+                break;
+            case SET_MAX_CHARGE_CURRENT:
+                format_1decimal(val, sizeof(val), s->max_charge_current_tenths);
+                break;
+            case SET_MAX_CHARGE_POWER:
+                snprintf(val, sizeof(val), "%dW", s->max_charge_power);
+                break;
+            case SET_BUZZER:
+                snprintf(val, sizeof(val), "%s", s->buzzer_on ? "ON" : "OFF");
+                break;
+            case SET_SAVE_MODE:
+                snprintf(val, sizeof(val), "%s", s->save_mode ? "SAVE" : "NO SAVE");
+                break;
+            case SET_EXIT:
+                snprintf(val, sizeof(val), "BACK");
+                break;
+            default:
+                break;
+        }
+
+        st7735_draw_string(98, y + 3, val, sel && s->edit_mode ? COLOR_YELLOW : COLOR_WHITE);
+        if (sel && s->edit_mode && i != SET_EXIT) {
+            st7735_draw_string(84, y + 3, "*", COLOR_YELLOW);
+        }
+    }
+}
+
+static void render_ui(const ui_state_t *s)
+{
+    if (s->screen == SCREEN_MAIN) {
+        draw_main_screen(s);
+    } else {
+        draw_settings_screen(s);
+    }
 }
 
 static int clamp_i(int v, int lo, int hi)
@@ -474,45 +582,115 @@ static int clamp_i(int v, int lo, int hi)
     return v;
 }
 
-static bool apply_encoder_steps(ui_state_t *s, int steps)
+static bool apply_main_steps(ui_state_t *s, int steps)
 {
     if (steps == 0) {
         return false;
     }
 
     if (!s->edit_mode) {
-        int n = s->selected + steps;
+        int n = s->main_selected + steps;
         while (n < 0) {
-            n += FIELD_COUNT;
+            n += MAIN_COUNT;
         }
-        s->selected = n % FIELD_COUNT;
+        s->main_selected = n % MAIN_COUNT;
         return true;
     }
 
-    switch (s->selected) {
-        case FIELD_PULSE1:
-            s->pulse1_tenths = clamp_i(s->pulse1_tenths + steps, 0, 200);
+    switch (s->main_selected) {
+        case MAIN_PULSE1:
+            s->pulse1_tenths = clamp_i(s->pulse1_tenths + steps, 0, 99);
             break;
-        case FIELD_PULSE2:
-            s->pulse2_tenths = clamp_i(s->pulse2_tenths + steps, 0, 200);
+        case MAIN_PULSE2:
+            s->pulse2_tenths = clamp_i(s->pulse2_tenths + steps, 0, 99);
             break;
-        case FIELD_INTERVAL:
-            s->interval_tenths = clamp_i(s->interval_tenths + steps, 1, 500);
+        case MAIN_INTERVAL:
+            s->interval_tenths = clamp_i(s->interval_tenths + steps, 0, 99);
             break;
-        case FIELD_WELD_MODE:
-            if (steps != 0) {
-                s->weld_auto = !s->weld_auto;
-            }
+        case MAIN_AUTO_WELD:
+            s->auto_weld_tenths = clamp_i(s->auto_weld_tenths + steps, 0, 99);
             break;
-        case FIELD_CHARGE_V:
-            s->charge_cent = clamp_i(s->charge_cent + (steps * 5), 300, 1000);
+        case MAIN_CHARGE_V:
+            s->charge_cent = clamp_i(s->charge_cent + steps, 300, 700);
             break;
-        case FIELD_SETTINGS:
-            s->setting_level = clamp_i(s->setting_level + steps, 0, 9);
-            break;
+        case MAIN_SETTINGS_ICON:
         default:
             break;
     }
+    return true;
+}
+
+static bool apply_settings_steps(ui_state_t *s, int steps)
+{
+    if (steps == 0) {
+        return false;
+    }
+
+    if (!s->edit_mode) {
+        int n = s->settings_selected + steps;
+        while (n < 0) {
+            n += SET_COUNT;
+        }
+        s->settings_selected = n % SET_COUNT;
+        return true;
+    }
+
+    switch (s->settings_selected) {
+        case SET_CAP_CHARGE:
+            if (steps != 0) {
+                s->cap_charge_on = !s->cap_charge_on;
+            }
+            break;
+        case SET_MAX_CHARGE_CURRENT:
+            s->max_charge_current_tenths = clamp_i(s->max_charge_current_tenths + steps, 10, 200);
+            break;
+        case SET_MAX_CHARGE_POWER:
+            s->max_charge_power = clamp_i(s->max_charge_power + steps, 10, 120);
+            break;
+        case SET_BUZZER:
+            if (steps != 0) {
+                s->buzzer_on = !s->buzzer_on;
+            }
+            break;
+        case SET_SAVE_MODE:
+            if (steps != 0) {
+                s->save_mode = !s->save_mode;
+            }
+            break;
+        case SET_EXIT:
+        default:
+            break;
+    }
+    return true;
+}
+
+static bool apply_encoder_steps(ui_state_t *s, int steps)
+{
+    if (s->screen == SCREEN_MAIN) {
+        return apply_main_steps(s, steps);
+    }
+    return apply_settings_steps(s, steps);
+}
+
+static bool handle_button_press(ui_state_t *s)
+{
+    if (s->screen == SCREEN_MAIN) {
+        if (!s->edit_mode && s->main_selected == MAIN_SETTINGS_ICON) {
+            s->screen = SCREEN_SETTINGS;
+            s->edit_mode = false;
+            return true;
+        }
+        s->edit_mode = !s->edit_mode;
+        return true;
+    }
+
+    if (!s->edit_mode && s->settings_selected == SET_EXIT) {
+        s->screen = SCREEN_MAIN;
+        s->edit_mode = false;
+        return true;
+    }
+
+    s->edit_mode = !s->edit_mode;
     return true;
 }
 
@@ -541,9 +719,11 @@ static void ui_task(void *arg)
 
         int sw = gpio_get_level(ENC_PIN_SW);
         if (sw_last == 1 && sw == 0) {
-            g_ui.edit_mode = !g_ui.edit_mode;
-            dirty = true;
-            ESP_LOGI(TAG, "mode=%s field=%d", g_ui.edit_mode ? "EDIT" : "NAV", g_ui.selected);
+            if (handle_button_press(&g_ui)) {
+                dirty = true;
+            }
+            ESP_LOGI(TAG, "screen=%d mode=%s main=%d set=%d", g_ui.screen,
+                     g_ui.edit_mode ? "EDIT" : "NAV", g_ui.main_selected, g_ui.settings_selected);
         }
         sw_last = sw;
 
