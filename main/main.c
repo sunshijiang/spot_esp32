@@ -21,12 +21,13 @@
 #define ENC_PIN_B 8
 #define ENC_PIN_SW 6
 
-#define LCD_WIDTH 128
-#define LCD_HEIGHT 160
+#define LCD_WIDTH 160
+#define LCD_HEIGHT 128
 
 #define COLOR_BLACK 0x0000
 #define COLOR_WHITE 0xFFFF
 #define LCD_TX_CHUNK_BYTES 32
+#define ST7735_MADCTL 0x36
 
 static const char *TAG = "spot_ui";
 
@@ -201,6 +202,10 @@ static void st7735_init(void)
     ESP_ERROR_CHECK(st7735_send_cmd(0x11));
     vTaskDelay(pdMS_TO_TICKS(120));
 
+    ESP_ERROR_CHECK(st7735_send_cmd(ST7735_MADCTL));
+    uint8_t madctl = 0x60;
+    ESP_ERROR_CHECK(st7735_send_data(&madctl, 1));
+
     ESP_ERROR_CHECK(st7735_send_cmd(0x3A));
     uint8_t color_mode = 0x05;
     ESP_ERROR_CHECK(st7735_send_data(&color_mode, 1));
@@ -316,13 +321,17 @@ static void ui_task(void *arg)
     (void)arg;
     char line[32];
     TickType_t last_wake = xTaskGetTickCount();
+    int last_value = 0x7FFFFFFF;
 
     while (1) {
         int value = counter;
-        st7735_fill_screen(COLOR_BLACK);
-        st7735_draw_string(4, 20, "ESP32 Spot UI", COLOR_WHITE);
-        snprintf(line, sizeof(line), "Counter: %d", value);
-        st7735_draw_string(4, 40, line, COLOR_WHITE);
+        if (value != last_value) {
+            st7735_fill_screen(COLOR_BLACK);
+            st7735_draw_string(4, 20, "ESP32 Spot UI", COLOR_WHITE);
+            snprintf(line, sizeof(line), "Counter: %d", value);
+            st7735_draw_string(4, 40, line, COLOR_WHITE);
+            last_value = value;
+        }
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(50));
     }
 }
