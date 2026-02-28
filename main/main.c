@@ -280,37 +280,6 @@ static void st7735_draw_string(uint16_t x, uint16_t y, const char *str, uint16_t
     }
 }
 
-static void st7735_draw_char_scaled(uint16_t x, uint16_t y, char c, uint16_t color, uint8_t scale)
-{
-    if (scale == 0 || c < 32 || c > 127) {
-        return;
-    }
-
-    uint8_t glyph_index = (uint8_t)(c - 32);
-    for (uint16_t col = 0; col < 5; col++) {
-        uint8_t bits = font5x7[glyph_index][col];
-        for (uint16_t row = 0; row < 7; row++) {
-            if ((bits >> row) & 0x01) {
-                for (uint8_t sx = 0; sx < scale; sx++) {
-                    for (uint8_t sy = 0; sy < scale; sy++) {
-                        st7735_draw_pixel((uint16_t)(x + col * scale + sx),
-                                          (uint16_t)(y + row * scale + sy), color);
-                    }
-                }
-            }
-        }
-    }
-}
-
-static void st7735_draw_string_scaled(uint16_t x, uint16_t y, const char *str, uint16_t color, uint8_t scale)
-{
-    while (*str != '\0') {
-        st7735_draw_char_scaled(x, y, *str, color, scale);
-        x = (uint16_t)(x + (6 * scale));
-        str++;
-    }
-}
-
 static void st7735_init(void)
 {
     ESP_ERROR_CHECK(st7735_send_cmd(0x01));
@@ -497,22 +466,22 @@ static void st7735_draw_line(int x0, int y0, int x1, int y1, uint16_t color)
 
 static void draw_pulse_icon(uint16_t x, uint16_t y, uint16_t color)
 {
-    st7735_draw_line(x + 0, y + 8, x + 8, y + 8, color);
-    st7735_draw_line(x + 8, y + 8, x + 11, y + 14, color);
-    st7735_draw_line(x + 11, y + 14, x + 15, y + 2, color);
-    st7735_draw_line(x + 15, y + 2, x + 19, y + 16, color);
-    st7735_draw_line(x + 19, y + 16, x + 24, y + 8, color);
-    st7735_draw_line(x + 24, y + 8, x + 34, y + 8, color);
+    st7735_draw_line(x + 0, y + 6, x + 5, y + 6, color);
+    st7735_draw_line(x + 5, y + 6, x + 8, y + 10, color);
+    st7735_draw_line(x + 8, y + 10, x + 11, y + 2, color);
+    st7735_draw_line(x + 11, y + 2, x + 14, y + 11, color);
+    st7735_draw_line(x + 14, y + 11, x + 18, y + 6, color);
+    st7735_draw_line(x + 18, y + 6, x + 24, y + 6, color);
 }
 
 static void draw_setting_icon(uint16_t x, uint16_t y, uint16_t color)
 {
-    st7735_draw_rect(x + 5, y + 5, 20, 20, color);
-    st7735_draw_rect(x + 10, y + 10, 10, 10, color);
-    st7735_draw_line(x + 15, y + 1, x + 15, y + 5, color);
-    st7735_draw_line(x + 15, y + 25, x + 15, y + 29, color);
-    st7735_draw_line(x + 1, y + 15, x + 5, y + 15, color);
-    st7735_draw_line(x + 25, y + 15, x + 29, y + 15, color);
+    st7735_draw_rect(x + 8, y + 8, 14, 14, color);
+    st7735_draw_rect(x + 12, y + 12, 6, 6, color);
+    st7735_draw_line(x + 15, y + 5, x + 15, y + 8, color);
+    st7735_draw_line(x + 15, y + 22, x + 15, y + 25, color);
+    st7735_draw_line(x + 5, y + 15, x + 8, y + 15, color);
+    st7735_draw_line(x + 22, y + 15, x + 25, y + 15, color);
 }
 
 static void draw_cn_label_small(uint16_t x, uint16_t y, const char *tag, uint16_t color)
@@ -570,19 +539,19 @@ static void draw_two_cell_tile(uint16_t x, uint16_t y, uint16_t w,
     uint16_t left_w = w / 2;
     uint16_t right_w = w - left_w;
 
-    draw_rounded_tile(x, y, w, 40, left_bg, selected, editing);
+    draw_rounded_tile(x, y, w, 40, COLOR_BLACK, selected, editing);
 
-    st7735_fill_rect(x + 2, y + 2, left_w - 3, 36, left_bg);
+    st7735_fill_rect(x + 2, y + 2, left_w - 3, 27, left_bg);
     if (pulse_icon) {
         draw_pulse_icon(x + 4, y + 7, COLOR_BLACK);
     }
-    draw_cn_label_small(x + 6, y + 29, cn_tag, COLOR_BLACK);
+    draw_cn_label_small(x + 6, y + 31, cn_tag, COLOR_BLACK);
 
-    st7735_fill_rect(x + left_w, y + 2, right_w - 2, 26, COLOR_DARKGRAY);
+    st7735_fill_rect(x + left_w, y + 2, right_w - 2, 27, COLOR_DARKGRAY);
     format_1decimal(v, sizeof(v), value_tenths);
-    st7735_draw_string_scaled(x + left_w + 4, y + 8, v, COLOR_WHITE, 2);
+    st7735_draw_string(x + left_w + 6, y + 11, v, COLOR_WHITE);
 
-    st7735_fill_rect(x + left_w, y + 29, right_w - 2, 9, COLOR_YELLOW);
+    st7735_fill_rect(x + 2, y + 30, w - 4, 8, COLOR_YELLOW);
     st7735_draw_string(x + left_w + 10, y + 30, unit, COLOR_BLACK);
 }
 
@@ -591,8 +560,8 @@ static void draw_charge_tile(uint16_t x, uint16_t y, uint16_t w, int charge_cent
 {
     char buf[16];
     draw_rounded_tile(x, y, w, 40, COLOR_DARKGRAY, selected, editing);
-    format_2decimal(buf, sizeof(buf), charge_cent);
-    st7735_draw_string(x + 3, y + 11, buf, COLOR_WHITE);
+    format_1decimal(buf, sizeof(buf), charge_cent / 10);
+    st7735_draw_string(x + 4, y + 12, buf, COLOR_WHITE);
     st7735_fill_rect(x + 2, y + 29, w - 3, 9, COLOR_YELLOW);
     draw_cn_label_small(x + 4, y + 30, "C", COLOR_BLACK);
 }
@@ -618,7 +587,7 @@ static void draw_main_screen(const ui_state_t *s)
 
     draw_rounded_tile(col4, row1_y, cell_w, 40, COLOR_ORANGE,
                       s->main_selected == MAIN_SETTINGS_ICON, s->edit_mode);
-    draw_setting_icon(col4, row1_y + 5, COLOR_BLACK);
+    draw_setting_icon(col4 + 1, row1_y + 3, COLOR_BLACK);
 
     draw_two_cell_tile(col0, row2_y, w2, COLOR_BLUE, "I", s->interval_tenths, "ms",
                        s->main_selected == MAIN_INTERVAL, s->edit_mode, false);
